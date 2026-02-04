@@ -137,7 +137,13 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
   }
 
   Widget _buildChart() {
-    return ScatterChart(
+    return CustomPaint(
+      painter: _GridPainter(
+        minY: minY,
+        maxY: maxY,
+        gridColor: ChartColors.grid,
+      ),
+      child: ScatterChart(
       ScatterChartData(
         minX: minX,
         maxX: maxX,
@@ -145,10 +151,7 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
         maxY: maxY,
         clipData: const FlClipData.none(), // Don't clip points at edges
         gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: (maxY - minY) / 3,
-          getDrawingHorizontalLine: (value) => FlLine(color: ChartColors.grid, strokeWidth: 1),
+          show: false, // Disabled - using custom grid painter
         ),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
@@ -233,6 +236,7 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
           },
         ),
         scatterLabelSettings: ScatterLabelSettings(showLabel: false),
+      ),
       ),
     );
   }
@@ -456,6 +460,46 @@ class _OriginalPriceWithLinePainter extends FlDotPainter {
       );
     }
     return b;
+  }
+}
+
+/// Custom grid painter that draws exactly 4 horizontal lines
+class _GridPainter extends CustomPainter {
+  final double minY;
+  final double maxY;
+  final Color gridColor;
+
+  _GridPainter({
+    required this.minY,
+    required this.maxY,
+    required this.gridColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Chart margins (match fl_chart's layout)
+    const double rightMargin = 70; // rightTitles.reservedSize
+    const double bottomMargin = 60; // bottomTitles.reservedSize + axisNameSize
+    
+    final chartWidth = size.width - rightMargin;
+    final chartHeight = size.height - bottomMargin;
+    
+    final paint = Paint()
+      ..color = gridColor
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    
+    // Draw exactly 4 horizontal lines
+    for (int i = 0; i <= 3; i++) {
+      final fraction = i / 3.0;
+      final y = chartHeight * (1 - fraction); // Invert because Y grows downward
+      canvas.drawLine(Offset(0, y), Offset(chartWidth, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GridPainter oldDelegate) {
+    return minY != oldDelegate.minY || maxY != oldDelegate.maxY;
   }
 }
 

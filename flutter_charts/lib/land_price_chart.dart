@@ -276,14 +276,8 @@ class _LandPriceChartState extends State<LandPriceChart> {
           gridData: FlGridData(
             show: true,
             drawVerticalLine: true,
-            drawHorizontalLine: true,
-            horizontalInterval: (maxY - minY) / 3,
+            drawHorizontalLine: false, // Disabled - using custom painter
             verticalInterval: (maxX - minX) / 4,
-            getDrawingHorizontalLine: (value) => FlLine(
-              color: LandChartColors.grid,
-              strokeWidth: 1,
-              dashArray: [4, 4],
-            ),
             getDrawingVerticalLine:
                 (value) => FlLine(
                   color: LandChartColors.grid,
@@ -604,6 +598,31 @@ class _TrendlinePainter extends CustomPainter {
         topMargin +
         chartHeight -
         ((value - minY) / (maxY - minY)) * chartHeight;
+
+    // Draw exactly 4 horizontal grid lines
+    final gridPaint = Paint()
+      ..color = LandChartColors.grid
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    
+    for (int i = 0; i <= 3; i++) {
+      final fraction = i / 3.0;
+      final y = topMargin + chartHeight * (1 - fraction);
+      
+      // Draw dashed line
+      const dashWidth = 4.0;
+      const dashSpace = 4.0;
+      double startX = leftMargin;
+      
+      while (startX < leftMargin + chartWidth) {
+        canvas.drawLine(
+          Offset(startX, y),
+          Offset(math.min(startX + dashWidth, leftMargin + chartWidth), y),
+          gridPaint,
+        );
+        startX += dashWidth + dashSpace;
+      }
+    }
 
     // Draw vertical dashed line for subject property
     if (subjectAcres != null) {
