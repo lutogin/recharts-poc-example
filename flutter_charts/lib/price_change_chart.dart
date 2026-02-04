@@ -52,46 +52,31 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
   MockListing? _hoveredListing;
   Offset? _mousePosition;
 
-  // Chart bounds constants
+  // Chart bounds
   static const double minX = 0;
   static const double maxX = 240;
   static const double radius = 10;
 
-  // Calculate Y bounds from actual data
-  late final double dataMinY;
-  late final double dataMaxY;
   late final double minY;
   late final double maxY;
-  late final List<double> yTicks;
+  /// Y scale: 4 levels — min, two evenly spaced, max
+  late final List<double> yLevels;
 
   @override
   void initState() {
     super.initState();
-    // Find actual min/max from data
-    double minPrice = double.infinity;
-    double maxPrice = double.negativeInfinity;
+    double minP = double.infinity;
+    double maxP = double.negativeInfinity;
     for (final listing in mockListings) {
-      final prices = [listing.originalPrice, listing.currentPrice];
-      for (final p in prices) {
-        if (p < minPrice) minPrice = p;
-        if (p > maxPrice) maxPrice = p;
+      for (final p in [listing.originalPrice, listing.currentPrice]) {
+        if (p < minP) minP = p;
+        if (p > maxP) maxP = p;
       }
     }
-    dataMinY = minPrice;
-    dataMaxY = maxPrice;
-    
-    // Use exact data bounds - no padding in domain
-    minY = dataMinY;
-    maxY = dataMaxY;
-    
-    // Generate 4 evenly spaced ticks
-    final step = (dataMaxY - dataMinY) / 3;
-    yTicks = [
-      dataMinY,
-      dataMinY + step,
-      dataMinY + step * 2,
-      dataMaxY,
-    ];
+    minY = minP;
+    maxY = maxP;
+    final step = (maxY - minY) / 3;
+    yLevels = [minY, minY + step, minY + step * 2, maxY];
   }
 
   @override
@@ -121,6 +106,7 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
                   child: Stack(
                     children: [
                       _buildChart(),
+                      _buildRightAxisLabels(constraints.maxWidth, constraints.maxHeight),
                       if (_hoveredListing != null && _mousePosition != null)
                         _buildTooltip(constraints),
                     ],
@@ -136,13 +122,42 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
     );
   }
 
+  static const double _rightAxisReserved = 70;
+  static const double _bottomMargin = 60;
+
+  Widget _buildRightAxisLabels(double width, double height) {
+    final chartH = height - _bottomMargin;
+    return Positioned(
+      right: 0,
+      top: 0,
+      bottom: _bottomMargin,
+      left: width - _rightAxisReserved,
+      child: IgnorePointer(
+        child: Stack(
+          children: [
+            for (int i = 0; i < 4; i++)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: (chartH * (1 - i / 3.0) - 7).clamp(0.0, chartH - 14),
+                child: Text(
+                  formatPrice(yLevels[i]),
+                  style: const TextStyle(
+                    color: ChartColors.neutral,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildChart() {
     return CustomPaint(
-      painter: _GridPainter(
-        minY: minY,
-        maxY: maxY,
-        gridColor: ChartColors.grid,
-      ),
+      painter: _YGridPainter(gridColor: ChartColors.grid),
       child: ScatterChart(
       ScatterChartData(
         minX: minX,
@@ -157,21 +172,8 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
         titlesData: FlTitlesData(
           leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 70,
-              interval: (maxY - minY) / 3,
-              getTitlesWidget: (value, meta) {
-                return Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Text(
-                    formatPrice(value),
-                    style: TextStyle(color: ChartColors.neutral, fontSize: 14),
-                  ),
-                );
-              },
-            ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false), // drawn by _buildRightAxisLabels
           ),
           bottomTitles: AxisTitles(
             axisNameSize: 30,
@@ -463,43 +465,31 @@ class _OriginalPriceWithLinePainter extends FlDotPainter {
   }
 }
 
-/// Custom grid painter that draws exactly 4 horizontal lines
-class _GridPainter extends CustomPainter {
-  final double minY;
-  final double maxY;
+/// Draws 4 horizontal grid lines (Y scale: min, two mid levels, max)
+class _YGridPainter extends CustomPainter {
   final Color gridColor;
 
-  _GridPainter({
-    required this.minY,
-    required this.maxY,
-    required this.gridColor,
-  });
+  _YGridPainter({required this.gridColor});
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Chart margins (match fl_chart's layout)
-    const double rightMargin = 70; // rightTitles.reservedSize
-    const double bottomMargin = 60; // bottomTitles.reservedSize + axisNameSize
-    
-    final chartWidth = size.width - rightMargin;
-    final chartHeight = size.height - bottomMargin;
-    
+    const rightMargin = 70.0;
+    const bottomMargin = 60.0;
+    final w = size.width - rightMargin;
+    final h = size.height - bottomMargin;
+
     final paint = Paint()
       ..color = gridColor
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
-    
-    // Draw exactly 4 horizontal lines
+
     for (int i = 0; i <= 3; i++) {
-      final fraction = i / 3.0;
-      final y = chartHeight * (1 - fraction); // Invert because Y grows downward
-      canvas.drawLine(Offset(0, y), Offset(chartWidth, y), paint);
+      final y = h * (1 - i / 3.0);
+      canvas.drawLine(Offset(0, y), Offset(w, y), paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _GridPainter oldDelegate) {
-    return minY != oldDelegate.minY || maxY != oldDelegate.maxY;
-  }
+  bool shouldRepaint(covariant _YGridPainter old) => gridColor != old.gridColor;
 }
 

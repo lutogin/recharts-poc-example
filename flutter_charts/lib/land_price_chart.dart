@@ -95,37 +95,27 @@ class _LandPriceChartState extends State<LandPriceChart> {
   late final List<MockListing> comparableListings;
   late final LinearRegressionResult? regression;
   
-  // Dynamic Y bounds calculated from data
   late final double minY;
   late final double maxY;
-  late final List<double> yTicks;
+  /// Y scale: 4 levels — min, two evenly spaced, max
+  late final List<double> yLevels;
 
   @override
   void initState() {
     super.initState();
     subjectListing = mockListings.where((l) => l.isSubject).firstOrNull;
     comparableListings = mockListings.where((l) => !l.isSubject).toList();
-    
-    // Calculate Y bounds from data
-    double minPrice = double.infinity;
-    double maxPrice = double.negativeInfinity;
+
+    double minP = double.infinity;
+    double maxP = double.negativeInfinity;
     for (final listing in mockListings) {
-      if (listing.price < minPrice) minPrice = listing.price;
-      if (listing.price > maxPrice) maxPrice = listing.price;
+      if (listing.price < minP) minP = listing.price;
+      if (listing.price > maxP) maxP = listing.price;
     }
-    
-    // Use exact data bounds - no padding
-    minY = minPrice;
-    maxY = maxPrice;
-    
-    // Generate 4 evenly spaced ticks
+    minY = minP;
+    maxY = maxP;
     final step = (maxY - minY) / 3;
-    yTicks = [
-      minY,
-      minY + step,
-      minY + step * 2,
-      maxY,
-    ];
+    yLevels = [minY, minY + step, minY + step * 2, maxY];
 
     // Calculate regression from comparable listings
     if (comparableListings.length >= 2) {
@@ -167,6 +157,7 @@ class _LandPriceChartState extends State<LandPriceChart> {
                   child: Stack(
                     children: [
                       _buildChart(constraints),
+                      _buildRightAxisLabels(constraints.maxWidth, constraints.maxHeight),
                       if (_hoveredListing != null && _mousePosition != null)
                         _buildTooltip(constraints),
                     ],
@@ -256,6 +247,39 @@ class _LandPriceChartState extends State<LandPriceChart> {
     );
   }
 
+  static const double _rightAxisReserved = 70;
+  static const double _bottomMargin = 60;
+
+  Widget _buildRightAxisLabels(double width, double height) {
+    final chartH = height - _bottomMargin;
+    return Positioned(
+      right: 0,
+      top: 0,
+      bottom: _bottomMargin,
+      left: width - _rightAxisReserved,
+      child: IgnorePointer(
+        child: Stack(
+          children: [
+            for (int i = 0; i < 4; i++)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: (chartH * (1 - i / 3.0) - 6).clamp(0.0, chartH - 12),
+                child: Text(
+                  formatPrice(yLevels[i]),
+                  style: const TextStyle(
+                    color: LandChartColors.text,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildChart(BoxConstraints constraints) {
     return CustomPaint(
       painter: _TrendlinePainter(
@@ -293,24 +317,8 @@ class _LandPriceChartState extends State<LandPriceChart> {
             topTitles: const AxisTitles(
               sideTitles: SideTitles(showTitles: false),
             ),
-            rightTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 70,
-                interval: (maxY - minY) / 3,
-                getTitlesWidget: (value, meta) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: Text(
-                      formatPrice(value),
-                      style: TextStyle(
-                        color: LandChartColors.text,
-                        fontSize: 12,
-                      ),
-                    ),
-                  );
-                },
-              ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false), // drawn by _buildRightAxisLabels
             ),
             bottomTitles: AxisTitles(
               axisNameSize: 30,
@@ -599,7 +607,7 @@ class _TrendlinePainter extends CustomPainter {
         chartHeight -
         ((value - minY) / (maxY - minY)) * chartHeight;
 
-    // Draw exactly 4 horizontal grid lines
+    // Y scale: 4 levels — 4 horizontal grid lines
     final gridPaint = Paint()
       ..color = LandChartColors.grid
       ..strokeWidth = 1
@@ -649,10 +657,20 @@ class _TrendlinePainter extends CustomPainter {
 
     if (regression == null) return;
 
+    final chartRect = Rect.fromLTWH(
+      leftMargin,
+      topMargin,
+      chartWidth,
+      chartHeight,
+    );
+
+    canvas.save();
+    canvas.clipRect(chartRect);
+
     final yRange = maxY - minY;
     final bandMargin = 0.30 * yRange;
 
-    // Confidence band
+    // Confidence band (drawn inside chart bounds)
     final bandPath = Path();
     final upperLeft = Offset(
       toX(minX),
@@ -695,6 +713,8 @@ class _TrendlinePainter extends CustomPainter {
       Offset(toX(maxX), toY(regression!.predict(maxX))),
       trendPaint,
     );
+
+    canvas.restore();
   }
 
   @override
