@@ -6,3 +6,15 @@ dist
 .env.development.local
 .env.test.local
 .env.production.local
+.dart_tool
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache
+.pub
+build
+.vscode
+.idea
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache
+.pub

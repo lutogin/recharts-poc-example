@@ -55,10 +55,44 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
   // Chart bounds constants
   static const double minX = 0;
   static const double maxX = 240;
-  // Add padding to Y domain so points at edges aren't cut off
-  static const double minY = 740000;  // Was 760000, added 20K padding
-  static const double maxY = 1270000; // Was 1250000, added 20K padding
   static const double radius = 10;
+
+  // Calculate Y bounds from actual data
+  late final double dataMinY;
+  late final double dataMaxY;
+  late final double minY;
+  late final double maxY;
+  late final List<double> yTicks;
+
+  @override
+  void initState() {
+    super.initState();
+    // Find actual min/max from data
+    double minPrice = double.infinity;
+    double maxPrice = double.negativeInfinity;
+    for (final listing in mockListings) {
+      final prices = [listing.originalPrice, listing.currentPrice];
+      for (final p in prices) {
+        if (p < minPrice) minPrice = p;
+        if (p > maxPrice) maxPrice = p;
+      }
+    }
+    dataMinY = minPrice;
+    dataMaxY = maxPrice;
+    
+    // Use exact data bounds - no padding in domain
+    minY = dataMinY;
+    maxY = dataMaxY;
+    
+    // Generate 4 evenly spaced ticks
+    final step = (dataMaxY - dataMinY) / 3;
+    yTicks = [
+      dataMinY,
+      dataMinY + step,
+      dataMinY + step * 2,
+      dataMaxY,
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +103,7 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            height: 520,
+            height: 560,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return MouseRegion(
@@ -109,18 +143,12 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
         maxX: maxX,
         minY: minY,
         maxY: maxY,
-        clipData: const FlClipData.all(),
+        clipData: const FlClipData.none(), // Don't clip points at edges
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
-          horizontalInterval: 165000,
-          getDrawingHorizontalLine: (value) {
-            // Only draw grid lines within the data range
-            if (value >= 760000 && value <= 1250000) {
-              return FlLine(color: ChartColors.grid, strokeWidth: 1);
-            }
-            return FlLine(color: Colors.transparent, strokeWidth: 0);
-          },
+          horizontalInterval: (maxY - minY) / 3,
+          getDrawingHorizontalLine: (value) => FlLine(color: ChartColors.grid, strokeWidth: 1),
         ),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
@@ -130,20 +158,15 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 70,
-              // Interval to get ~4 labels in the visible range
-              interval: 165000,
+              interval: (maxY - minY) / 3,
               getTitlesWidget: (value, meta) {
-                // Only show labels for values within the data range
-                if (value >= 760000 && value <= 1250000) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: Text(
-                      formatPrice(value),
-                      style: TextStyle(color: ChartColors.neutral, fontSize: 14),
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    formatPrice(value),
+                    style: TextStyle(color: ChartColors.neutral, fontSize: 14),
+                  ),
+                );
               },
             ),
           ),
@@ -219,8 +242,8 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
     
     // Calculate pixel per price unit (approximate chart height is 520 - 60 bottom margin = 460)
     const double chartHeightApprox = 460;
-    const double priceRange = maxY - minY;
-    const double pixelsPerPriceUnit = chartHeightApprox / priceRange;
+    final double priceRange = maxY - minY;
+    final double pixelsPerPriceUnit = chartHeightApprox / priceRange;
 
     // Original prices (empty circles) with connecting lines
     for (final listing in mockListings) {

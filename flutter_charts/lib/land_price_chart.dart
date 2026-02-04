@@ -89,19 +89,43 @@ class _LandPriceChartState extends State<LandPriceChart> {
 
   static const double minX = 0.02;
   static const double maxX = 0.06;
-  static const double minY = 720000; // need to be set dynamically
-  static const double maxY = 1200000; // need to be set dynamically
   static const int averagePrice = 29569003; // need to be set dynamically
 
   late final MockListing? subjectListing;
   late final List<MockListing> comparableListings;
   late final LinearRegressionResult? regression;
+  
+  // Dynamic Y bounds calculated from data
+  late final double minY;
+  late final double maxY;
+  late final List<double> yTicks;
 
   @override
   void initState() {
     super.initState();
     subjectListing = mockListings.where((l) => l.isSubject).firstOrNull;
     comparableListings = mockListings.where((l) => !l.isSubject).toList();
+    
+    // Calculate Y bounds from data
+    double minPrice = double.infinity;
+    double maxPrice = double.negativeInfinity;
+    for (final listing in mockListings) {
+      if (listing.price < minPrice) minPrice = listing.price;
+      if (listing.price > maxPrice) maxPrice = listing.price;
+    }
+    
+    // Use exact data bounds - no padding
+    minY = minPrice;
+    maxY = maxPrice;
+    
+    // Generate 4 evenly spaced ticks
+    final step = (maxY - minY) / 3;
+    yTicks = [
+      minY,
+      minY + step,
+      minY + step * 2,
+      maxY,
+    ];
 
     // Calculate regression from comparable listings
     if (comparableListings.length >= 2) {
@@ -124,7 +148,7 @@ class _LandPriceChartState extends State<LandPriceChart> {
           _buildHeader(),
           const SizedBox(height: 16),
           SizedBox(
-            height: 480,
+            height: 520,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return MouseRegion(
@@ -248,19 +272,18 @@ class _LandPriceChartState extends State<LandPriceChart> {
           maxX: maxX,
           minY: minY,
           maxY: maxY,
-          clipData: const FlClipData.all(),
+          clipData: const FlClipData.none(), // Don't clip points at edges
           gridData: FlGridData(
             show: true,
             drawVerticalLine: true,
             drawHorizontalLine: true,
-            horizontalInterval: (maxY - minY) / 4,
+            horizontalInterval: (maxY - minY) / 3,
             verticalInterval: (maxX - minX) / 4,
-            getDrawingHorizontalLine:
-                (value) => FlLine(
-                  color: LandChartColors.grid,
-                  strokeWidth: 1,
-                  dashArray: [4, 4],
-                ),
+            getDrawingHorizontalLine: (value) => FlLine(
+              color: LandChartColors.grid,
+              strokeWidth: 1,
+              dashArray: [4, 4],
+            ),
             getDrawingVerticalLine:
                 (value) => FlLine(
                   color: LandChartColors.grid,
@@ -280,31 +303,18 @@ class _LandPriceChartState extends State<LandPriceChart> {
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 70,
-                interval: 10000, // Small interval to catch all expected values
-                // interval: (maxY - minY) / 4,
+                interval: (maxY - minY) / 3,
                 getTitlesWidget: (value, meta) {
-                  // Show labels at specific Y values
-                  final validValues = [
-                    760000.0,
-                    898000.0,
-                    1040000.0,
-                    1180000.0,
-                  ];
-                  for (final v in validValues) {
-                    if ((value - v).abs() < 5000) {
-                      return Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Text(
-                          formatPrice(v),
-                          style: TextStyle(
-                            color: LandChartColors.text,
-                            fontSize: 12,
-                          ),
-                        ),
-                      );
-                    }
-                  }
-                  return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      formatPrice(value),
+                      style: TextStyle(
+                        color: LandChartColors.text,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
                 },
               ),
             ),
