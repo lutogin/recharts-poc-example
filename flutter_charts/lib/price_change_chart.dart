@@ -173,7 +173,10 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
           leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           rightTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false), // drawn by _buildRightAxisLabels
+            sideTitles: SideTitles(
+              showTitles: false, // drawn by _buildRightAxisLabels
+              reservedSize: 70, // must match painter's rightMargin
+            ),
           ),
           bottomTitles: AxisTitles(
             axisNameSize: 30,
@@ -187,9 +190,9 @@ class _PriceChangeChartState extends State<PriceChangeChart> {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 30,
-              interval: 1, // Check every value
+              interval: 1,
               getTitlesWidget: (value, meta) {
-                final validValues = [1, 72, 144, 215];
+                final validValues = [1, 72, 144, 215]; // hardcoded for PoC. Need to be calculated dynamically
                 final intValue = value.round();
                 if (validValues.contains(intValue) && (value - intValue).abs() < 0.5) {
                   return Padding(

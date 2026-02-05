@@ -158,6 +158,8 @@ class _LandPriceChartState extends State<LandPriceChart> {
                     children: [
                       _buildChart(constraints),
                       _buildRightAxisLabels(constraints.maxWidth, constraints.maxHeight),
+                      if (showSubjectProperty && subjectListing != null)
+                        _buildSubjectPropertyOverlay(constraints.maxWidth, constraints.maxHeight),
                       if (_hoveredListing != null && _mousePosition != null)
                         _buildTooltip(constraints),
                     ],
@@ -280,6 +282,38 @@ class _LandPriceChartState extends State<LandPriceChart> {
     );
   }
 
+  /// Subject property: vertical dashed line + house icon (drawn together)
+  Widget _buildSubjectPropertyOverlay(double width, double height) {
+    final chartW = width - _rightAxisReserved;
+    final chartH = height - _bottomMargin;
+    // X position from acres
+    final fractionX = (subjectListing!.acres - minX) / (maxX - minX);
+    final x = fractionX * chartW;
+    // Y position from price
+    final fractionY = (subjectListing!.price - minY) / (maxY - minY);
+    final y = chartH * (1 - fractionY);
+    
+    const iconRadius = 12.0;
+    
+    return Positioned.fill(
+      bottom: _bottomMargin,
+      right: _rightAxisReserved,
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _SubjectPropertyOverlayPainter(
+            x: x,
+            y: y,
+            chartHeight: chartH,
+            iconRadius: iconRadius,
+            lineColor: LandChartColors.neutral,
+            iconBorderColor: LandChartColors.subjectBorder,
+            iconFillColor: LandChartColors.background,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildChart(BoxConstraints constraints) {
     return CustomPaint(
       painter: _TrendlinePainter(
@@ -288,7 +322,6 @@ class _LandPriceChartState extends State<LandPriceChart> {
         maxX: maxX,
         minY: minY,
         maxY: maxY,
-        subjectAcres: showSubjectProperty ? subjectListing?.acres : null,
       ),
       child: ScatterChart(
         ScatterChartData(
@@ -318,7 +351,10 @@ class _LandPriceChartState extends State<LandPriceChart> {
               sideTitles: SideTitles(showTitles: false),
             ),
             rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false), // drawn by _buildRightAxisLabels
+              sideTitles: SideTitles(
+                showTitles: false, // drawn by _buildRightAxisLabels
+                reservedSize: 70, // must match painter's rightMargin
+              ),
             ),
             bottomTitles: AxisTitles(
               axisNameSize: 30,
@@ -413,16 +449,7 @@ class _LandPriceChartState extends State<LandPriceChart> {
       );
     }
 
-    // Subject property
-    if (showSubjectProperty && subjectListing != null) {
-      spots.add(
-        ScatterSpot(
-          subjectListing!.acres,
-          subjectListing!.price,
-          dotPainter: _SubjectPropertyPainter(radius: 10),
-        ),
-      );
-    }
+    // Subject property is drawn separately via _buildSubjectPropertyOverlay
 
     return spots;
   }
@@ -573,11 +600,124 @@ class _LandPriceChartState extends State<LandPriceChart> {
   }
 }
 
+/// Draws a vertical dashed line
+class _VerticalDashedLinePainter extends CustomPainter {
+  final Color color;
+
+  _VerticalDashedLinePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    const dashHeight = 4.0;
+    const dashSpace = 4.0;
+    double y = 0;
+    while (y < size.height) {
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(0, math.min(y + dashHeight, size.height)),
+        paint,
+      );
+      y += dashHeight + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _VerticalDashedLinePainter old) => color != old.color;
+}
+
+/// Draws subject property: vertical dashed line + house icon at exact position
+class _SubjectPropertyOverlayPainter extends CustomPainter {
+  final double x;
+  final double y;
+  final double chartHeight;
+  final double iconRadius;
+  final Color lineColor;
+  final Color iconBorderColor;
+  final Color iconFillColor;
+
+  _SubjectPropertyOverlayPainter({
+    required this.x,
+    required this.y,
+    required this.chartHeight,
+    required this.iconRadius,
+    required this.lineColor,
+    required this.iconBorderColor,
+    required this.iconFillColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Draw vertical dashed line from top to bottom of chart
+    final linePaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    const dashHeight = 4.0;
+    const dashSpace = 4.0;
+    double currentY = 0;
+    while (currentY < chartHeight) {
+      canvas.drawLine(
+        Offset(x, currentY),
+        Offset(x, math.min(currentY + dashHeight, chartHeight)),
+        linePaint,
+      );
+      currentY += dashHeight + dashSpace;
+    }
+
+    // Draw house icon at (x, y)
+    // White fill circle
+    final fillPaint = Paint()
+      ..color = iconFillColor
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(x, y), iconRadius, fillPaint);
+
+    // Blue border
+    final borderPaint = Paint()
+      ..color = iconBorderColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    canvas.drawCircle(Offset(x, y), iconRadius, borderPaint);
+
+    // House icon inside
+    final housePaint = Paint()
+      ..color = iconBorderColor
+      ..style = PaintingStyle.fill;
+
+    final houseSize = iconRadius * 0.8;
+    final houseX = x;
+    final houseY = y;
+
+    // Draw simple house shape (pentagon)
+    final housePath = Path();
+    // Roof peak
+    housePath.moveTo(houseX, houseY - houseSize * 0.6);
+    // Right roof
+    housePath.lineTo(houseX + houseSize * 0.5, houseY - houseSize * 0.1);
+    // Right wall
+    housePath.lineTo(houseX + houseSize * 0.5, houseY + houseSize * 0.5);
+    // Left wall
+    housePath.lineTo(houseX - houseSize * 0.5, houseY + houseSize * 0.5);
+    // Left roof
+    housePath.lineTo(houseX - houseSize * 0.5, houseY - houseSize * 0.1);
+    housePath.close();
+    canvas.drawPath(housePath, housePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SubjectPropertyOverlayPainter old) =>
+      x != old.x || y != old.y || chartHeight != old.chartHeight;
+}
+
 /// Custom painter for trendline and confidence band
 class _TrendlinePainter extends CustomPainter {
   final LinearRegressionResult? regression;
   final double minX, maxX, minY, maxY;
-  final double? subjectAcres;
 
   _TrendlinePainter({
     required this.regression,
@@ -585,7 +725,6 @@ class _TrendlinePainter extends CustomPainter {
     required this.maxX,
     required this.minY,
     required this.maxY,
-    this.subjectAcres,
   });
 
   @override
@@ -629,29 +768,6 @@ class _TrendlinePainter extends CustomPainter {
           gridPaint,
         );
         startX += dashWidth + dashSpace;
-      }
-    }
-
-    // Draw vertical dashed line for subject property
-    if (subjectAcres != null) {
-      final x = toX(subjectAcres!);
-      final paint =
-          Paint()
-            ..color = LandChartColors.neutral
-            ..strokeWidth = 1
-            ..style = PaintingStyle.stroke;
-
-      const dashHeight = 4.0;
-      const dashSpace = 4.0;
-      double startY = topMargin;
-
-      while (startY < topMargin + chartHeight) {
-        canvas.drawLine(
-          Offset(x, startY),
-          Offset(x, math.min(startY + dashHeight, topMargin + chartHeight)),
-          paint,
-        );
-        startY += dashHeight + dashSpace;
       }
     }
 
@@ -719,8 +835,7 @@ class _TrendlinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TrendlinePainter oldDelegate) {
-    return regression != oldDelegate.regression ||
-        subjectAcres != oldDelegate.subjectAcres;
+    return regression != oldDelegate.regression;
   }
 }
 
