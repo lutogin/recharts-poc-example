@@ -455,8 +455,9 @@ class _LandPriceChartState extends State<LandPriceChart> {
   }
 
   Widget _buildTooltip(BoxConstraints constraints) {
-    if (_hoveredListing == null || _mousePosition == null)
+    if (_hoveredListing == null || _mousePosition == null) {
       return const SizedBox.shrink();
+    }
 
     final listing = _hoveredListing!;
     final pricePerAcre = listing.price / listing.acres;
@@ -598,36 +599,6 @@ class _LandPriceChartState extends State<LandPriceChart> {
       (Match m) => '${m[1]},',
     );
   }
-}
-
-/// Draws a vertical dashed line
-class _VerticalDashedLinePainter extends CustomPainter {
-  final Color color;
-
-  _VerticalDashedLinePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-
-    const dashHeight = 4.0;
-    const dashSpace = 4.0;
-    double y = 0;
-    while (y < size.height) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(0, math.min(y + dashHeight, size.height)),
-        paint,
-      );
-      y += dashHeight + dashSpace;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _VerticalDashedLinePainter old) => color != old.color;
 }
 
 /// Draws subject property: vertical dashed line + house icon at exact position
@@ -836,69 +807,6 @@ class _TrendlinePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _TrendlinePainter oldDelegate) {
     return regression != oldDelegate.regression;
-  }
-}
-
-/// Custom painter for subject property marker (circle with house icon)
-class _SubjectPropertyPainter extends FlDotPainter {
-  final double radius;
-
-  _SubjectPropertyPainter({required this.radius});
-
-  @override
-  void draw(Canvas canvas, FlSpot spot, Offset offsetInCanvas) {
-    // White fill
-    final fillPaint =
-        Paint()
-          ..color = LandChartColors.background
-          ..style = PaintingStyle.fill;
-    canvas.drawCircle(offsetInCanvas, radius, fillPaint);
-
-    // Blue border
-    final borderPaint =
-        Paint()
-          ..color = LandChartColors.subjectBorder
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5;
-    canvas.drawCircle(offsetInCanvas, radius, borderPaint);
-
-    // House icon (simple pentagon)
-    final iconSize = radius * 1.2;
-    final iconPaint =
-        Paint()
-          ..color = LandChartColors.title
-          ..style = PaintingStyle.fill;
-
-    final path = Path();
-    final cx = offsetInCanvas.dx;
-    final cy = offsetInCanvas.dy;
-    // Peak, left roof, left wall, right wall, right roof
-    path.moveTo(cx, cy - iconSize / 2); // peak
-    path.lineTo(cx - iconSize / 2, cy); // left roof
-    path.lineTo(cx - iconSize / 2, cy + iconSize / 2); // left wall bottom
-    path.lineTo(cx + iconSize / 2, cy + iconSize / 2); // right wall bottom
-    path.lineTo(cx + iconSize / 2, cy); // right roof
-    path.close();
-    canvas.drawPath(path, iconPaint);
-  }
-
-  @override
-  Size getSize(FlSpot spot) => Size(radius * 2, radius * 2);
-
-  @override
-  Color get mainColor => LandChartColors.subjectBorder;
-
-  @override
-  List<Object?> get props => [radius];
-
-  @override
-  FlDotPainter lerp(FlDotPainter a, FlDotPainter b, double t) {
-    if (a is _SubjectPropertyPainter && b is _SubjectPropertyPainter) {
-      return _SubjectPropertyPainter(
-        radius: a.radius + (b.radius - a.radius) * t,
-      );
-    }
-    return b;
   }
 }
 
